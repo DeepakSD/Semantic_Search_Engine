@@ -5,8 +5,9 @@ Created on Oct 30, 2017
 '''
 import collections
 import io
+import json
 import os
-from urllib2 import *
+import urllib2
 
 from nltk import tokenize
 from nltk.tokenize import word_tokenize
@@ -16,7 +17,7 @@ import pandas as pd
 
 
 class DataProcessing:
-    def fileToDataFrame(self, path):  
+    def fileToJson(self, path):  
         data = []
         for f in sorted(os.listdir(path)):
             with io.open(path + f, 'r', encoding='utf-8', errors='ignore') as dataFile:
@@ -33,37 +34,35 @@ class DataProcessing:
                 index = 'A' + str(i + 1) + 'S' + str(j + 1)
                 indexSentenceMap[index] = set(word_tokenize(data[i][j]))
         
-        for k, v in indexSentenceMap.items():
-            print(k, v)
-                
-         
-            
-#        dFrame = pd.DataFrame(data)
-#         dFrame.to_csv('MainData.csv', index=False)
+#         for k, v in indexSentenceMap.items():
+#             print(k, v)
+        dFrame = pd.DataFrame(indexSentenceMap.items(), columns=['id', 'words'])
+        dFrame.to_json('Mainjson.json', orient='records')
+#        print(dFrame)
         
     '''
-    Test Function
+    Test function
     '''    
-    def dfToJson(self):
-        dFrame = pd.read_csv('/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/MainData.csv')
-        dFrame.to_json('Mainjson.json', orient='index')
-    
     def indexWithSolr(self):
         solr = pysolr.Solr('http://localhost:8983/solr/default')
-        solr.add([
-    {
-        "id": "doc_1",
-        "title": "A test document",
-    },
-    {
-        "id": "doc_2",
-        "title": "A Banana:Tasty or Dangerous?",
-    },
-])
-        connection = urlopen('http://localhost:8983/solr/default/select?q=title:A&wt=python')
+#         with open("/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/Mainjson.json", 'r') as data_file:
+#             my_data = data_file.read()
+#         print(my_data)
+#         solr.add([
+#     {
+#         "id": "doc_1",
+#         "title": ["A test document"],
+#     },
+#     {
+#         "id": "doc_2",
+#         "title": ["A Banana:Tasty or Dangerous?"],
+#     },
+# ])    
+        solr.add(json.load("/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/Mainjson.json"))
+        connection = urllib2.urlopen('http://localhost:8983/solr/default/select?q=title:of&wt=python')
         response = eval(connection.read())
         print(response['response']['numFound'], "documents found.")
-        
+         
         for document in response['response']['docs']:
             print("Name =", document['id'])
 
@@ -71,6 +70,5 @@ class DataProcessing:
 if __name__ == '__main__':
     dp = DataProcessing()
     path = '/Users/deepaks/Documents/workspace/Semantic_Search_Engine/Data/'
-    dp.fileToDataFrame(path)
-    # dp.indexWithSolr()
-#     dp.dfToJson()
+    dp.fileToJson(path)
+    dp.indexWithSolr()
