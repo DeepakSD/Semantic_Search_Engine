@@ -8,6 +8,7 @@ import io
 import json
 import os
 import urllib2
+import string
 
 from nltk import tokenize
 from nltk.tokenize import word_tokenize
@@ -33,36 +34,28 @@ class DataProcessing:
             for j in range(0, len(data[i])):
                 index = 'A' + str(i + 1) + 'S' + str(j + 1)
                 indexSentenceMap[index] = set(word_tokenize(data[i][j]))
-        
 #         for k, v in indexSentenceMap.items():
 #             print(k, v)
         dFrame = pd.DataFrame(indexSentenceMap.items(), columns=['id', 'words'])
         dFrame.to_json('Mainjson.json', orient='records')
 #        print(dFrame)
         
-    '''
-    Test function
-    '''    
+   
     def indexWithSolr(self):
         solr = pysolr.Solr('http://localhost:8983/solr/default')
-#         with open("/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/Mainjson.json", 'r') as data_file:
-#             my_data = data_file.read()
-#         print(my_data)
-#         solr.add([
-#     {
-#         "id": "doc_1",
-#         "title": ["A test document"],
-#     },
-#     {
-#         "id": "doc_2",
-#         "title": ["A Banana:Tasty or Dangerous?"],
-#     },
-# ])    
-        solr.add(json.load("/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/Mainjson.json"))
-        connection = urllib2.urlopen('http://localhost:8983/solr/default/select?q=title:of&wt=python')
+        solr.delete(q='*:*')
+        
+        with open("/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/Mainjson.json", 'rb') as jsonFile:
+            entry = jsonFile.read()
+        req = urllib2.Request('http://localhost:8983/solr/default/update/json?commit=true', entry)
+        req.add_header('Content-Type', 'application/json')
+        urllib2.urlopen(req)
+        # print(response.read())
+        
+        
+        connection = urllib2.urlopen('http://localhost:8983/solr/default/select?q=words:Time&wt=python')
         response = eval(connection.read())
         print(response['response']['numFound'], "documents found.")
-         
         for document in response['response']['docs']:
             print("Name =", document['id'])
 
