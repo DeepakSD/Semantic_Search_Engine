@@ -38,9 +38,9 @@ class DataProcessing:
 #             print(k, v)
         dFrame = pd.DataFrame(indexSentenceMap.items(), columns=['id', 'words'])
         dFrame.to_json('Mainjson.json', orient='records')
-#        print(dFrame)
         
-   
+        
+    # Refer https://github.com/Parsely/python-solr/blob/master/pythonsolr/pysolr.py 
     def indexWithSolr(self):
         solr = pysolr.Solr('http://localhost:8983/solr/default')
         solr.delete(q='*:*')
