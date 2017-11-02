@@ -5,10 +5,8 @@ Created on Oct 30, 2017
 '''
 import collections
 import io
-import json
 import os
 import urllib2
-import string
 
 from nltk import tokenize
 from nltk.tokenize import word_tokenize
@@ -51,7 +49,6 @@ class DataProcessing:
         req.add_header('Content-Type', 'application/json')
         urllib2.urlopen(req)
         # print(response.read())
-        
         
         connection = urllib2.urlopen('http://localhost:8983/solr/default/select?q=words:Time&wt=python')
         response = eval(connection.read())
