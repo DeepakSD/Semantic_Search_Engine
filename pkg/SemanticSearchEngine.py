@@ -65,10 +65,8 @@ class SemanticSearchEngine:
         return list(set(word_tokenize(query)))
     
     def searchInSolr(self, solr, query):
-        tmp = ""
-        for item in query:
-            tmp = tmp + item + " "
-        results = solr.search(q="words:" + tmp)
+        query = "words:" + " & words:".join(query)
+        results = solr.search(query)
         print("Top 10 documents that closely match the query")
         for result in results:
             print(result['id'])
