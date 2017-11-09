@@ -9,20 +9,43 @@ import json
 import os
 
 from nltk import tokenize
+from nltk.stem.porter import PorterStemmer
+from nltk.stem.wordnet import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
+from nltk import pos_tag 
 import pysolr
 
 import pandas as pd
 
 
 class SemanticSearchEngine:
-    def corpusToJson(self, path):  
+
+    def preprocessCorpus(self, path):  
         data = self.readArticles(path)
         data = self.removeArticleTitle(data)
-        indexSentenceMap = self.createIndexMap(data)
-        dFrame = pd.DataFrame(list(indexSentenceMap.items()), columns=['id', 'words'])
+        
+        indexWordsMap = self.createIndexMap(data)
+        wordsDFrame = pd.DataFrame(list(indexWordsMap.items()), columns=['id', 'words'])
+        
+        indexLemmaMap = self.lemmatizeWords(indexWordsMap)
+        lemmaDFrame = pd.DataFrame(list(indexLemmaMap.items()), columns=['id', 'lemmas'])
+        
+        indexStemMap = self.stemWords(indexWordsMap)
+        stemDFrame = pd.DataFrame(list(indexStemMap.items()), columns=['id', 'stems'])
+        
+        indexPOSMap = self.tagPOSWords(indexWordsMap)
+        POSDFrame = pd.DataFrame(list(indexPOSMap.items()), columns=['id', 'POS'])
+        
+        
+        
         jsonFileName = 'words.json'
-        dFrame.to_json(jsonFileName, orient='records')
+        wordsDFrame.to_json(jsonFileName, orient='records')
+        jsonFileName = 'lemmas.json'
+        lemmaDFrame.to_json(jsonFileName, orient='records')
+        jsonFileName = 'stems.json'
+        stemDFrame.to_json(jsonFileName, orient='records')
+        jsonFileName = 'pos.json'
+        POSDFrame.to_json(jsonFileName, orient='records')
         return jsonFileName
         
     def readArticles(self, path):
@@ -42,18 +65,39 @@ class SemanticSearchEngine:
         return data
             
     def createIndexMap(self, data):
-        indexSentenceMap = collections.OrderedDict()
+        indexWordsMap = collections.OrderedDict()
         for i in range(0, len(data)):
             for j in range(0, len(data[i])):
                 index = 'A' + str(i + 1) + 'S' + str(j + 1)
-                indexSentenceMap[index] = list(set(word_tokenize(data[i][j])))
-        return indexSentenceMap
-        
-        
+                indexWordsMap[index] = list(set(word_tokenize(data[i][j])))
+        return indexWordsMap
+    
+    def lemmatizeWords(self, indexWordsMap):
+        indexLemmaMap = collections.OrderedDict()
+        wnl = WordNetLemmatizer()
+        for k, v in indexWordsMap.items():
+            indexLemmaMap[k] = [wnl.lemmatize(word) for word in v]
+        return indexLemmaMap
+    
+    def stemWords(self, indexWordsMap):
+        indexStemMap = collections.OrderedDict()
+        stemmer = PorterStemmer()
+        for k, v in indexWordsMap.items():
+            indexStemMap[k] = [stemmer.stem(word) for word in v]
+        return indexStemMap
+    
+    def tagPOSWords(self, indexWordsMap):
+        indexPOSMap = collections.OrderedDict()
+        for k, v in indexWordsMap.items():
+            indexPOSMap[k] = [pos_tag(word) for word in v]
+        return indexPOSMap
+    
+    def extractHypernyms(self, indexWordsMap):
+        indexHypernymMap = collections.OrderedDict()
  
     # Refer https://github.com/Parsely/python-solr/blob/master/pythonsolr/pysolr.py 
-    def indexWithSolr(self, jsonFileName):
-        solr = pysolr.Solr('http://localhost:8983/solr/default')
+    def indexWordsWithSolr(self, jsonFileName):
+        solr = pysolr.Solr('http://localhost:8983/solr/task2')
         solr.delete(q='*:*')
         
         with open("/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/" + jsonFileName, 'rb') as jsonFile:
@@ -83,8 +127,9 @@ class SemanticSearchEngine:
 if __name__ == '__main__':
     sse = SemanticSearchEngine()
     path = '/Users/deepaks/Documents/workspace/Semantic_Search_Engine/Data/'
-    jsonFileName = sse.corpusToJson(path)
-    solr = sse.indexWithSolr(jsonFileName)
+    jsonFileName = sse.preprocessCorpus(path)
+    solr = sse.indexWordsWithSolr(jsonFileName)
     query = input("Enter the input query: ")
     processedQuery = sse.processQuery(query)
-    sse.searchInSolr(solr, processedQuery)     
+    sse.searchInSolr(solr, processedQuery) 
+        
