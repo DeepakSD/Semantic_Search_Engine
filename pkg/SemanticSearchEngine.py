@@ -28,44 +28,9 @@ class SemanticSearchEngine:
         indexWordsMap = self.createIndexMap(data)
         wordsDFrame = pd.DataFrame(list(indexWordsMap.items()), columns=['id', 'words'])
         
-        indexLemmaMap = self.lemmatizeWords(indexWordsMap)
-        lemmaDFrame = pd.DataFrame(list(indexLemmaMap.items()), columns=['id', 'lemmas'])
-         
-        indexStemMap = self.stemWords(indexWordsMap)
-        stemDFrame = pd.DataFrame(list(indexStemMap.items()), columns=['id', 'stems'])
-         
-        indexPOSMap = self.tagPOSWords(indexWordsMap)
-        POSDFrame = pd.DataFrame(list(indexPOSMap.items()), columns=['id', 'POS'])
-           
-        indexHypernymMap = self.extractHypernyms(indexWordsMap)
-        HypernymDFrame = pd.DataFrame(list(indexHypernymMap.items()), columns=['id', 'hypernyms'])
-         
-        indexHyponymMap = self.extractHyponyms(indexWordsMap)
-        HyponymDFrame = pd.DataFrame(list(indexHyponymMap.items()), columns=['id', 'hyponyms'])
-        
-        indexMeronymMap = self.extractMeronyms(indexWordsMap)
-        MeronymDFrame = pd.DataFrame(list(indexMeronymMap.items()), columns=['id', 'meronyms'])
-        
-        indexHolonymMap = self.extractHolonyms(indexWordsMap)
-        HolonymDFrame = pd.DataFrame(list(indexHolonymMap.items()), columns=['id', 'holonyms'])
-        
         jsonFileName = 'words.json'
         wordsDFrame.to_json(jsonFileName, orient='records')
-        jsonFileName = 'lemmas.json'
-        lemmaDFrame.to_json(jsonFileName, orient='records')
-        jsonFileName = 'stems.json'
-        stemDFrame.to_json(jsonFileName, orient='records')
-        jsonFileName = 'pos.json'
-        POSDFrame.to_json(jsonFileName, orient='records')
-        jsonFileName = 'hypernym.json'
-        HypernymDFrame.to_json(jsonFileName, orient='records')
-        jsonFileName = 'hyponym.json'
-        HyponymDFrame.to_json(jsonFileName, orient='records')
-        jsonFileName = 'meronym.json'
-        MeronymDFrame.to_json(jsonFileName, orient='records')
-        jsonFileName = 'holonym.json'
-        HolonymDFrame.to_json(jsonFileName, orient='records')
-        return 'words.json'
+        return indexWordsMap, jsonFileName
         
     def readArticles(self, path):
         data = []
@@ -91,6 +56,32 @@ class SemanticSearchEngine:
                 indexWordsMap[index] = list(set(word_tokenize(data[i][j])))
         return indexWordsMap
     
+    def extractFeatures(self, indexWordsMap):
+        indexLemmaMap = self.lemmatizeWords(indexWordsMap)
+        lemmaDFrame = pd.DataFrame(list(indexLemmaMap.items()), columns=['id', 'lemmas'])
+        indexStemMap = self.stemWords(indexWordsMap)
+        stemDFrame = pd.DataFrame(list(indexStemMap.items()), columns=['id', 'stems'])
+        indexPOSMap = self.tagPOSWords(indexWordsMap)
+        POSDFrame = pd.DataFrame(list(indexPOSMap.items()), columns=['id', 'POS'])  
+        indexHypernymMap = self.extractHypernyms(indexWordsMap)
+        HypernymDFrame = pd.DataFrame(list(indexHypernymMap.items()), columns=['id', 'hypernyms'])
+        indexHyponymMap = self.extractHyponyms(indexWordsMap)
+        HyponymDFrame = pd.DataFrame(list(indexHyponymMap.items()), columns=['id', 'hyponyms'])
+        indexMeronymMap = self.extractMeronyms(indexWordsMap)
+        MeronymDFrame = pd.DataFrame(list(indexMeronymMap.items()), columns=['id', 'meronyms'])
+        indexHolonymMap = self.extractHolonyms(indexWordsMap)
+        HolonymDFrame = pd.DataFrame(list(indexHolonymMap.items()), columns=['id', 'holonyms'])
+        
+        jsonFileList = ['words.json', 'lemmas.json', 'stems.json', 'pos.json', 'hypernym.json', 'hyponym.json', 'meronym.json', 'holonym.json']
+        lemmaDFrame.to_json(jsonFileList[1], orient='records')
+        stemDFrame.to_json(jsonFileList[2], orient='records')
+        POSDFrame.to_json(jsonFileList[3], orient='records')
+        HypernymDFrame.to_json(jsonFileList[4], orient='records')
+        HyponymDFrame.to_json(jsonFileList[5], orient='records')
+        MeronymDFrame.to_json(jsonFileList[6], orient='records')
+        HolonymDFrame.to_json(jsonFileList[7], orient='records')
+        return jsonFileList
+    
     def lemmatizeWords(self, indexWordsMap):
         indexLemmaMap = collections.OrderedDict()
         wnl = WordNetLemmatizer()
@@ -111,8 +102,6 @@ class SemanticSearchEngine:
             indexPOSMap[k] = [pos_tag(word) for word in v]
         return indexPOSMap
     
-    '''TODO: Check this function'''
-
     def extractHypernyms(self, indexWordsMap):
         indexHypernymMap = collections.OrderedDict()
         for k, v in indexWordsMap.items():
@@ -147,7 +136,6 @@ class SemanticSearchEngine:
         indexMeronymMap = collections.OrderedDict()
         for k, v in indexWordsMap.items():
             meronymList = []
-            '''Can use common Meronyms for Task 4'''
             for word in v:
                 synset = wn.synsets(word)
                 if len(synset) > 0:
@@ -162,7 +150,6 @@ class SemanticSearchEngine:
         indexHolonymMap = collections.OrderedDict()
         for k, v in indexWordsMap.items():
             holonymList = []
-            '''Can use common Meronyms for Task 4'''
             for word in v:
                 synset = wn.synsets(word)
                 if len(synset) > 0:
@@ -192,22 +179,28 @@ class SemanticSearchEngine:
         print("Top 10 documents that closely match the query")
         for result in results:
             print(result['id'])
-        '''
-        Another format for search
-        '''
-#         connection = urllib2.urlopen('http://localhost:8983/solr/default/select?q=words:Time&wt=python')
-#         response = eval(connection.read())
-#         print(response['response']['numFound'], "documents found.")
-#         for document in response['response']['docs']:
-#             print("Name =", document['id'])
-
+    
+    def indexFeaturesWithSolr(self, jsonFileList):
+        solr = pysolr.Solr('http://localhost:8983/solr/task3')
+        solr.delete(q='*:*')
+        
+        for jsonFileName in jsonFileList:
+            with open("/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/" + jsonFileName, 'rb') as jsonFile:
+                entry = json.load(jsonFile)
+            solr.add(entry)
+        return solr
+    
     
 if __name__ == '__main__':
     sse = SemanticSearchEngine()
     path = '/Users/deepaks/Documents/workspace/Semantic_Search_Engine/Data/'
-    jsonFileName = sse.preprocessCorpus(path)
+    # Task 2
+    indexWordsMap, jsonFileName = sse.preprocessCorpus(path)
     solr = sse.indexWordsWithSolr(jsonFileName)
     query = input("Enter the input query: ")
     processedQuery = sse.processQuery(query)
     sse.searchInSolr(solr, processedQuery) 
+    # Task 3
+    jsonFileList = sse.extractFeatures(indexWordsMap)
+    solr = sse.indexFeatureswithSolr(jsonFileList)
         
