@@ -8,11 +8,12 @@ import io
 import json
 import os
 
-from nltk import tokenize
-from nltk.stem.porter import PorterStemmer
-from nltk.stem.wordnet import WordNetLemmatizer
-from nltk.tokenize import word_tokenize
 from nltk import pos_tag 
+from nltk import tokenize
+from nltk.corpus import wordnet as wn
+from nltk.stem import WordNetLemmatizer
+from nltk.stem.porter import PorterStemmer
+from nltk.tokenize import word_tokenize
 import pysolr
 
 import pandas as pd
@@ -29,14 +30,24 @@ class SemanticSearchEngine:
         
         indexLemmaMap = self.lemmatizeWords(indexWordsMap)
         lemmaDFrame = pd.DataFrame(list(indexLemmaMap.items()), columns=['id', 'lemmas'])
-        
+         
         indexStemMap = self.stemWords(indexWordsMap)
         stemDFrame = pd.DataFrame(list(indexStemMap.items()), columns=['id', 'stems'])
-        
+         
         indexPOSMap = self.tagPOSWords(indexWordsMap)
         POSDFrame = pd.DataFrame(list(indexPOSMap.items()), columns=['id', 'POS'])
+           
+        indexHypernymMap = self.extractHypernyms(indexWordsMap)
+        HypernymDFrame = pd.DataFrame(list(indexHypernymMap.items()), columns=['id', 'hypernyms'])
+         
+        indexHyponymMap = self.extractHyponyms(indexWordsMap)
+        HyponymDFrame = pd.DataFrame(list(indexHyponymMap.items()), columns=['id', 'hyponyms'])
         
+        indexMeronymMap = self.extractMeronyms(indexWordsMap)
+        MeronymDFrame = pd.DataFrame(list(indexMeronymMap.items()), columns=['id', 'meronyms'])
         
+        indexHolonymMap = self.extractHolonyms(indexWordsMap)
+        HolonymDFrame = pd.DataFrame(list(indexHolonymMap.items()), columns=['id', 'holonyms'])
         
         jsonFileName = 'words.json'
         wordsDFrame.to_json(jsonFileName, orient='records')
@@ -46,7 +57,15 @@ class SemanticSearchEngine:
         stemDFrame.to_json(jsonFileName, orient='records')
         jsonFileName = 'pos.json'
         POSDFrame.to_json(jsonFileName, orient='records')
-        return jsonFileName
+        jsonFileName = 'hypernym.json'
+        HypernymDFrame.to_json(jsonFileName, orient='records')
+        jsonFileName = 'hyponym.json'
+        HyponymDFrame.to_json(jsonFileName, orient='records')
+        jsonFileName = 'meronym.json'
+        MeronymDFrame.to_json(jsonFileName, orient='records')
+        jsonFileName = 'holonym.json'
+        HolonymDFrame.to_json(jsonFileName, orient='records')
+        return 'words.json'
         
     def readArticles(self, path):
         data = []
@@ -92,8 +111,67 @@ class SemanticSearchEngine:
             indexPOSMap[k] = [pos_tag(word) for word in v]
         return indexPOSMap
     
+    '''TODO: Check this function'''
+
     def extractHypernyms(self, indexWordsMap):
         indexHypernymMap = collections.OrderedDict()
+        for k, v in indexWordsMap.items():
+            hypernymList = []
+            '''Can use common Hypernyms for Task 4'''
+            for word in v:
+                synset = wn.synsets(word)
+                if len(synset) > 0:
+                    if len(synset[0].hypernyms()) > 0:
+                        hypernymList.append(synset[0].hypernyms()[0].name().split('.')[0])
+                else:
+                    hypernymList.append(word)
+            indexHypernymMap[k] = hypernymList
+        return indexHypernymMap
+    
+    def extractHyponyms(self, indexWordsMap):
+        indexHyponymMap = collections.OrderedDict()
+        for k, v in indexWordsMap.items():
+            hyponymList = []
+            '''Can use common Hyponyms for Task 4'''
+            for word in v:
+                synset = wn.synsets(word)
+                if len(synset) > 0:
+                    if len(synset[0].hyponyms()) > 0:
+                        hyponymList.append(synset[0].hyponyms()[0].name().split('.')[0])
+                else:
+                    hyponymList.append(word)
+            indexHyponymMap[k] = hyponymList
+        return indexHyponymMap
+    
+    def extractMeronyms(self, indexWordsMap):
+        indexMeronymMap = collections.OrderedDict()
+        for k, v in indexWordsMap.items():
+            meronymList = []
+            '''Can use common Meronyms for Task 4'''
+            for word in v:
+                synset = wn.synsets(word)
+                if len(synset) > 0:
+                    if len(synset[0].part_meronyms()) > 0:
+                        meronymList.append(synset[0].part_meronyms()[0].name().split('.')[0])
+                else:
+                    meronymList.append(word)
+            indexMeronymMap[k] = meronymList
+        return indexMeronymMap
+    
+    def extractHolonyms(self, indexWordsMap):
+        indexHolonymMap = collections.OrderedDict()
+        for k, v in indexWordsMap.items():
+            holonymList = []
+            '''Can use common Meronyms for Task 4'''
+            for word in v:
+                synset = wn.synsets(word)
+                if len(synset) > 0:
+                    if len(synset[0].part_holonyms()) > 0:
+                        holonymList.append(synset[0].part_holonyms()[0].name().split('.')[0])
+                else:
+                    holonymList.append(word)
+            indexHolonymMap[k] = holonymList
+        return indexHolonymMap
  
     # Refer https://github.com/Parsely/python-solr/blob/master/pythonsolr/pysolr.py 
     def indexWordsWithSolr(self, jsonFileName):
