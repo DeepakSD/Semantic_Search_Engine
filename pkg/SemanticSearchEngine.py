@@ -304,8 +304,8 @@ class SemanticSearchEngine:
         holonyms = self.processQueryToExtractHolonyms(words)
         return [words, lemmas, stems, posTags, headWord, hypernyms, hyponyms, meronyms, holonyms]
     
-    def searchInSolrWithMultipleFeatures(self,featuesList):
-        query = "words:" + " & words:".join(featuesList[0])
+    def searchInSolrWithMultipleFeatures(self, solr, featuresList):
+        query = "words:" + " & words:".join(featuresList[0])
         results = solr.search(query)
         print("Top 10 documents that closely match the query")
         for result in results:
