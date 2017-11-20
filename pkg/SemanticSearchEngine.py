@@ -6,7 +6,6 @@ Created on Oct 30, 2017
 from _functools import reduce
 import collections
 import io
-import itertools
 import json
 import os
 
@@ -104,7 +103,10 @@ class SemanticSearchEngine:
         print("POS Tagging...")
         indexPOSMap = collections.OrderedDict()
         for k, v in indexWordsMap.items():
-            indexPOSMap[k] = pos_tag(v)
+            posTags = []
+            for taggedWord in pos_tag(v):
+                posTags.append(taggedWord[1])
+            indexPOSMap[k] = posTags
         return indexPOSMap
     
     def findHeadWord(self, data):
@@ -230,8 +232,8 @@ class SemanticSearchEngine:
     
     def processQueryToDoPOSTagging(self, words):
         posTags = []
-        for word in words:
-            posTags.append(pos_tag(word))
+        for taggedWord in pos_tag(words):
+            posTags.append(taggedWord[1])
         return posTags
     
     def processQueryToExtractHeadWord(self, query):
@@ -310,31 +312,27 @@ class SemanticSearchEngine:
         query1 = "words:" + " & words:".join(featuresList[0])
         query2 = "lemmas:" + " & lemmas:".join(featuresList[1])
         query3 = "stems:" + " & stems:".join(featuresList[2])
-#         query4 = "POS:" + " & POS:".join(featuresList[3])
+        query4 = "POS:" + " & POS:".join(featuresList[3])
         query5 = "head:" + featuresList[4]
         query6 = "hypernyms:" + " & hypernyms:".join(featuresList[5])
         query7 = "hyponyms:" + " & hyponyms:".join(featuresList[6])
         query8 = "meronyms:" + " & meronyms:".join(featuresList[7])
         query9 = "holonyms:" + " & holonyms:".join(featuresList[8])
-        query = [query1, query2, query3, query5, query6, query7, query8, query9]
+        query = [query1, query2, query3, query4, query5, query6, query7, query8, query9]
         joinedQuery = ' & '.join(item for item in query)
-        results1 = solr.search(joinedQuery)
-#         results2 = solr.search(query2)
+        results = solr.search(joinedQuery)
         print("Top 10 documents that closely match the query1")
-        for result in results1:
+        for result in results:
             print(result['id'])
-#         print("Top 10 documents that closely match the query2")
-#         for result in results2:
-#             print(result['id'])
 
     
 if __name__ == '__main__':
     sse = SemanticSearchEngine()
     path = '/Users/deepaks/Documents/workspace/Semantic_Search_Engine/Data/'
-    inputChoice = input("Enter the choice whether to continue with\n 1. Task2 \n 2. Task3\n")
+    inputChoice = input("Enter the choice to continue with\n 1. Task2 \n 2. Task3\n")
+    data, indexWordsMap, wordsDFrame, jsonFileName = sse.preprocessCorpus(path)
     # Task 2
     if inputChoice == "Task2":
-        data, indexWordsMap, wordsDFrame, jsonFileName = sse.preprocessCorpus(path)
         sse.indexWordsWithSolr('Task2.json')
         query = input("Enter the input query: ")
         processedQuery = sse.processQueryToExtractWords(query)
