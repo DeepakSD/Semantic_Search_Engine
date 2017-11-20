@@ -6,6 +6,7 @@ Created on Oct 30, 2017
 from _functools import reduce
 import collections
 import io
+import itertools
 import json
 import os
 
@@ -59,6 +60,7 @@ class SemanticSearchEngine:
         return indexWordsMap
     
     def extractFeatures(self, data, indexWordsMap):
+        wordsDFrame = pd.DataFrame(list(indexWordsMap.items()), columns=['id', 'words'])
         indexLemmaMap = self.lemmatizeWords(indexWordsMap)
         lemmaDFrame = pd.DataFrame(list(indexLemmaMap.items()), columns=['id', 'lemmas'])
         indexStemMap = self.stemWords(indexWordsMap)
@@ -75,7 +77,7 @@ class SemanticSearchEngine:
         MeronymDFrame = pd.DataFrame(list(indexMeronymMap.items()), columns=['id', 'meronyms'])
         indexHolonymMap = self.extractHolonyms(indexWordsMap)
         HolonymDFrame = pd.DataFrame(list(indexHolonymMap.items()), columns=['id', 'holonyms'])
-        dfList = [lemmaDFrame, stemDFrame, POSDFrame, HeadDFrame, HypernymDFrame, HyponymDFrame, MeronymDFrame, HolonymDFrame]
+        dfList = [wordsDFrame, lemmaDFrame, stemDFrame, POSDFrame, HeadDFrame, HypernymDFrame, HyponymDFrame, MeronymDFrame, HolonymDFrame]
         finalDFrame = reduce(lambda left, right: pd.merge(left, right, on='id'), dfList)
         
         jsonFileName = 'Task3.json'
@@ -191,12 +193,12 @@ class SemanticSearchEngine:
         with open("/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/" + jsonFileName, 'rb') as jsonFile:
             entry = json.load(jsonFile)
         solr.add(entry)
-        return solr
     
     def processQueryToExtractWords(self, query):
         return list(set(word_tokenize(query)))
     
-    def searchInSolr(self, solr, query):
+    def searchInSolr(self, query):
+        solr = pysolr.Solr('http://localhost:8983/solr/task2')
         query = "words:" + " & words:".join(query)
         results = solr.search(query)
         print("Top 10 documents that closely match the query")
@@ -211,7 +213,6 @@ class SemanticSearchEngine:
         with open("/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/" + jsonFileName, 'rb') as jsonFile:
             entry = json.load(jsonFile)
         solr.add(entry)
-        return solr
     
     def processQueryToDoLemmatization(self, words):
         lemmas = []
@@ -304,27 +305,45 @@ class SemanticSearchEngine:
         holonyms = self.processQueryToExtractHolonyms(words)
         return [words, lemmas, stems, posTags, headWord, hypernyms, hyponyms, meronyms, holonyms]
     
-    def searchInSolrWithMultipleFeatures(self, solr, featuresList):
-        query = "words:" + " & words:".join(featuresList[0])
-        results = solr.search(query)
-        print("Top 10 documents that closely match the query")
-        for result in results:
+    def searchInSolrWithMultipleFeatures(self, featuresList):
+        solr = pysolr.Solr('http://localhost:8983/solr/task3')
+        query1 = "words:" + " & words:".join(featuresList[0])
+        query2 = "lemmas:" + " & lemmas:".join(featuresList[1])
+        query3 = "stems:" + " & stems:".join(featuresList[2])
+#         query4 = "POS:" + " & POS:".join(featuresList[3])
+        query5 = "head:" + featuresList[4]
+        query6 = "hypernyms:" + " & hypernyms:".join(featuresList[5])
+        query7 = "hyponyms:" + " & hyponyms:".join(featuresList[6])
+        query8 = "meronyms:" + " & meronyms:".join(featuresList[7])
+        query9 = "holonyms:" + " & holonyms:".join(featuresList[8])
+        query = [query1, query2, query3, query5, query6, query7, query8, query9]
+        joinedQuery = ' & '.join(item for item in query)
+        results1 = solr.search(joinedQuery)
+#         results2 = solr.search(query2)
+        print("Top 10 documents that closely match the query1")
+        for result in results1:
             print(result['id'])
+#         print("Top 10 documents that closely match the query2")
+#         for result in results2:
+#             print(result['id'])
 
     
 if __name__ == '__main__':
     sse = SemanticSearchEngine()
     path = '/Users/deepaks/Documents/workspace/Semantic_Search_Engine/Data/'
+    inputChoice = input("Enter the choice whether to continue with\n 1. Task2 \n 2. Task3\n")
     # Task 2
-    data, indexWordsMap, wordsDFrame, jsonFileName = sse.preprocessCorpus(path)
-    solr = sse.indexWordsWithSolr('Task2.json')
-    query = input("Enter the input query: ")
-    processedQuery = sse.processQueryToExtractWords(query)
-    sse.searchInSolr(solr, processedQuery) 
+    if inputChoice == "Task2":
+        data, indexWordsMap, wordsDFrame, jsonFileName = sse.preprocessCorpus(path)
+        sse.indexWordsWithSolr('Task2.json')
+        query = input("Enter the input query: ")
+        processedQuery = sse.processQueryToExtractWords(query)
+        sse.searchInSolr(processedQuery) 
     # Task 3
-#     jsonFileName = sse.extractFeatures(data, indexWordsMap)
-    solr = sse.indexFeaturesWithSolr('Task3.json')
-    query = input("Enter the input query: ")
-    featuresList = sse.processQueryToExtractAllFeatures(query)
-    sse.searchInSolrWithMultipleFeatures(solr, featuresList)
+    elif inputChoice == "Task3":
+        jsonFileName = sse.extractFeatures(data, indexWordsMap)
+        sse.indexFeaturesWithSolr('Task3.json')
+        query = input("Enter the input query: ")
+        featuresList = sse.processQueryToExtractAllFeatures(query)
+        sse.searchInSolrWithMultipleFeatures(featuresList)
         
