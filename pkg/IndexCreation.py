@@ -87,6 +87,31 @@ class IndexCreation():
         jsonFileName = 'Task3.json'
         finalDFrame.to_json(jsonFileName, orient='records')
         return jsonFileName
+    
+    def extractImprovisedFeatures(self, data, indexWordsMap):
+        wordsDFrame = pd.DataFrame(list(indexWordsMap.items()), columns=['id', 'words'])
+        indexPOSWithWordsMap = self.tagPOSWithWords(indexWordsMap)
+        POSDFrame = pd.DataFrame(list(indexPOSWithWordsMap.items()), columns=['id', 'POSWithWords'])
+        indexLemmaMap = self.improvedLemmatizeWords(indexPOSWithWordsMap)
+        lemmaDFrame = pd.DataFrame(list(indexLemmaMap.items()), columns=['id', 'lemmas'])
+        indexStemMap = self.stemWords(indexWordsMap)
+        stemDFrame = pd.DataFrame(list(indexStemMap.items()), columns=['id', 'stems'])
+        indexHeadMap = self.findHeadWord(data)
+        HeadDFrame = pd.DataFrame(list(indexHeadMap.items()), columns=['id', 'head'])
+        indexHypernymMap = self.extractHypernyms(indexWordsMap)
+        HypernymDFrame = pd.DataFrame(list(indexHypernymMap.items()), columns=['id', 'hypernyms'])
+        indexHyponymMap = self.extractHyponyms(indexWordsMap)
+        HyponymDFrame = pd.DataFrame(list(indexHyponymMap.items()), columns=['id', 'hyponyms'])
+        indexMeronymMap = self.extractMeronyms(indexWordsMap)
+        MeronymDFrame = pd.DataFrame(list(indexMeronymMap.items()), columns=['id', 'meronyms'])
+        indexHolonymMap = self.extractHolonyms(indexWordsMap)
+        HolonymDFrame = pd.DataFrame(list(indexHolonymMap.items()), columns=['id', 'holonyms'])
+        dfList = [wordsDFrame, lemmaDFrame, stemDFrame, POSDFrame, HeadDFrame, HypernymDFrame, HyponymDFrame, MeronymDFrame, HolonymDFrame]
+        finalDFrame = reduce(lambda left, right: pd.merge(left, right, on='id'), dfList)
+
+        jsonFileName = 'Task4.json'
+        finalDFrame.to_json(jsonFileName, orient='records')
+        return jsonFileName
 
     def lemmatizeWords(self, indexWordsMap):
         print("Lemmatizing...")
@@ -95,6 +120,33 @@ class IndexCreation():
         for k, v in indexWordsMap.items():
             indexLemmaMap[k] = [wnl.lemmatize(word) for word in v]
         return indexLemmaMap
+    
+    def improvedLemmatizeWords(self, indexPOSWithWordsMap):
+        print("Improved Lemmatizing...")
+        indexLemmaMap = collections.OrderedDict()
+        wnl = WordNetLemmatizer()
+        for k, v in indexPOSWithWordsMap.items():
+            lemmasList = []
+            for word, tag in v:
+                wnTag = self.getWordnetTag(tag)
+                if wnTag is None:
+                    lemmasList.append(wnl.lemmatize(word))
+                else:
+                    lemmasList.append(wnl.lemmatize(word, pos=wnTag))
+            indexLemmaMap[k] = lemmasList
+        return indexLemmaMap
+    
+    def getWordnetTag(self, tag):
+        if tag.startswith('J'):
+            return wn.ADJ
+        elif tag.startswith('V'):
+            return wn.VERB
+        elif tag.startswith('N'):
+            return wn.NOUN
+        elif tag.startswith('R'):
+            return wn.ADV
+        else:
+            return None
 
     def stemWords(self, indexWordsMap):
         print("Stemming...")
@@ -113,6 +165,13 @@ class IndexCreation():
                 posTags.append(taggedWord[1])
             indexPOSMap[k] = posTags
         return indexPOSMap
+    
+    def tagPOSWithWords(self, indexWordsMap):
+        print("Improvised POS Tagging...")
+        indexPOSWithWordsMap = collections.OrderedDict()
+        for k, v in indexWordsMap.items():
+            indexPOSWithWordsMap[k] = pos_tag(v)
+        return indexPOSWithWordsMap
 
     def findHeadWord(self, data):
         print("Head Word Extraction...")
@@ -192,9 +251,9 @@ class IndexCreation():
         return indexHolonymMap
 
     # Refer https://github.com/Parsely/python-solr/blob/master/pythonsolr/pysolr.py
-    def indexFeaturesWithSolr(self, jsonFileName):
+    def indexFeaturesWithSolr(self, jsonFileName, inputChoice):
         print("Indexing...")
-        solr = pysolr.Solr('http://localhost:8983/solr/task3')
+        solr = pysolr.Solr('http://localhost:8983/solr/task' + str(int(inputChoice) + 1))
         # solr.delete(q='*:*')
 
         with open("/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/" + jsonFileName, 'rb') as jsonFile:
@@ -205,8 +264,14 @@ class IndexCreation():
 if __name__ == '__main__':
     ic = IndexCreation()
     path = '/Users/deepaks/Documents/workspace/Semantic_Search_Engine/Data/'
+    inputChoice = input("Enter the option to continue with\n 1. Task2 \n 2. Task3\n 3. Task4\n ") 
     data, indexWordsMap, wordsDFrame, jsonFileName = ic.preprocessCorpus(path)
-    ic.indexFeaturesWithSolr(jsonFileName)
-
-    jsonFileName = ic.extractFeatures(data, indexWordsMap)
-    ic.indexFeaturesWithSolr(jsonFileName)
+    if inputChoice == "1":
+        ic.indexFeaturesWithSolr(jsonFileName, inputChoice)
+    elif inputChoice == "2":
+        jsonFileName = ic.extractFeatures(data, indexWordsMap)
+        ic.indexFeaturesWithSolr(jsonFileName, inputChoice)
+    elif inputChoice == "3":
+        jsonFileName = ic.extractImprovisedFeatures(data, indexWordsMap)
+        ic.indexFeaturesWithSolr(jsonFileName, inputChoice)
+    

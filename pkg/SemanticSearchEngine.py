@@ -54,6 +54,18 @@ class SemanticSearchEngine:
             lemmas.append(wnl.lemmatize(word))
         return lemmas
     
+    def processQueryToDoImprovedLemmatization(self, posTags):
+        lemmas = []
+        wnl = WordNetLemmatizer()
+        ic = IndexCreation()
+        for word, tag in posTags:
+            wnTag = ic.getWordnetTag(tag)
+            if wnTag is None:
+                lemmas.append(wnl.lemmatize(word))
+            else:
+                lemmas.append(wnl.lemmatize(word, pos=wnTag))
+        return lemmas
+    
     def processQueryToDoStemming(self, words):
         stems = []
         stemmer = PorterStemmer()
@@ -66,6 +78,9 @@ class SemanticSearchEngine:
         for taggedWord in pos_tag(words):
             posTags.append(taggedWord[1])
         return posTags
+    
+    def processQueryToDoPOSTaggingWithWords(self, words):
+        return pos_tag(words)
     
     def processQueryToExtractHeadWord(self, query):
         dependency_parser = CoreNLPDependencyParser('http://localhost:9000')
@@ -138,12 +153,20 @@ class SemanticSearchEngine:
         holonyms = self.processQueryToExtractHolonyms(words)
         return [words, lemmas, stems, posTags, headWord, hypernyms, hyponyms, meronyms, holonyms]
     
+    def improvisationTask(self, query):
+        words = self.processQueryToExtractWords(query)
+        posTags = self.processQueryToDoPOSTaggingWithWords(words)
+        lemmas = self.processQueryToDoImprovedLemmatization(posTags)
+        stems = self.processQueryToDoStemming(words)
+        headWord = self.processQueryToExtractHeadWord(query)
+        hypernyms = self.processQueryToExtractHypernyms(words)
+        hyponyms = self.processQueryToExtractHyponyms(words)
+        meronyms = self.processQueryToExtractMeronyms(words)
+        holonyms = self.processQueryToExtractHolonyms(words)
+        return [words, lemmas, stems, posTags, headWord, hypernyms, hyponyms, meronyms, holonyms]
+    
     def searchInSolrWithMultipleFeatures(self, featuresList, indexSentenceMap):
         solr = pysolr.Solr('http://localhost:8983/solr/task3')
-        params = {'defType': 'dismax',
-                  'qf':'words^1.0 lemmas^1.0 stems^1.0 POS^1.0 head^1.0 hypernyms^1.0 hyponyms^1.0 meronyms^1.0 holonyms^1.0'
-                  }
-     
         query1 = "words:" + " || words:".join(featuresList[0])
         query2 = "lemmas:" + " || lemmas:".join(featuresList[1])
         query3 = "stems:" + " || stems:".join(featuresList[2])
@@ -156,45 +179,41 @@ class SemanticSearchEngine:
         query = [query1, query2, query3, query4, query5, query6, query7, query8, query9]
         joinedQuery = ' || '.join(item for item in query)
         results = solr.search(joinedQuery)
-        results1 = solr.search(joinedQuery, **params)
         print()
         print("Top 10 documents that closely match the query")
         for result in results:
             print(result['id'].ljust(10), indexSentenceMap[result['id']])
-        print()
-        print("Top 10 documents that closely match the query1")
-        for result in results1:
-            print(result['id'].ljust(10), indexSentenceMap[result['id']])
             
-#     def goldenSetRetrieval(self, query):
-#         with open('/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/MainData.csv', 'r', encoding='utf-8', errors='ignore') as infile:
-#             reader = csv.reader(infile)
-#             indexWordsMap = {rows[0]:rows[1] for rows in reader}
-#         processedQuery = self.processQueryToExtractWords(query)
-#         countMap = dict()
-#         for k, v in indexWordsMap.items():
-#             count = 0
-#             for word in processedQuery:
-#                 if word in v:
-#                     count += 1
-#             countMap[k] = count
-#         countMap = sorted(countMap.items(), key=operator.itemgetter(1), reverse=True)
-#         count = 0
-#         for item in countMap:
-#             k, v = item
-#             print(k)
-#             count += 1
-#             if(count == 10):
-#                 break
-
+    def searchInSolrWithMultipleImprovisedFeatures(self, featuresList, indexSentenceMap):
+        solr = pysolr.Solr('http://localhost:8983/solr/task4')
+        params = {'defType': 'dismax',
+                  'qf':'words^1.0 lemmas^1.0 stems^1.0 POS^1.0 head^1.0 hypernyms^1.0 hyponyms^1.0 meronyms^1.0 holonyms^1.0'
+                  }
+     
+        query1 = "words:" + " || words:".join(featuresList[0])
+        query2 = "lemmas:" + " || lemmas:".join(featuresList[1])
+        query3 = "stems:" + " || stems:".join(featuresList[2])
+        query4 = "POSWithWords:" + " || POSWithWords:".join(str(v) for v in featuresList[3])
+        query5 = "head:" + featuresList[4]
+        query6 = "hypernyms:" + " || hypernyms:".join(featuresList[5])
+        query7 = "hyponyms:" + " || hyponyms:".join(featuresList[6])
+        query8 = "meronyms:" + " || meronyms:".join(featuresList[7])
+        query9 = "holonyms:" + " || holonyms:".join(featuresList[8])
+        query = [query1, query2, query3, query4, query5, query6, query7, query8, query9]
+        joinedQuery = ' || '.join(item for item in query)
+        results = solr.search(joinedQuery)
+        print()
+        print("Top 10 documents that closely match the query")
+        for result in results:
+            print(result['id'].ljust(10), indexSentenceMap[result['id']])
+    
     
 if __name__ == '__main__':
     sse = SemanticSearchEngine()
     path = '/Users/deepaks/Documents/workspace/Semantic_Search_Engine/Data/'
-    inputChoice = input("Enter the option to continue with\n 1. Task2 \n 2. Task3\n") 
+    inputChoice = input("Enter the option to continue with\n 1. Task2 \n 2. Task3\n 3. Task4\n ") 
     indexSentenceMap = sse.getArticleAndWordCount(path)
     query = input("Enter the input query: ")
-    # sse.goldenSetRetrieval(query)
     # Task 2
     if inputChoice == "1":
         processedQuery = sse.processQueryToExtractWords(query)
@@ -203,4 +222,8 @@ if __name__ == '__main__':
     elif inputChoice == "2":
         featuresList = sse.processQueryToExtractAllFeatures(query)
         sse.searchInSolrWithMultipleFeatures(featuresList, indexSentenceMap)
+    # Task 4    
+    elif inputChoice == "3":
+        featuresList = sse.improvisationTask(query)
+        sse.searchInSolrWithMultipleImprovisedFeatures(featuresList, indexSentenceMap)
         
