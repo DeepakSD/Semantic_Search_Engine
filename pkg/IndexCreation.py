@@ -9,7 +9,7 @@ import io
 import json
 import os
 
-from nltk import pos_tag 
+from nltk import pos_tag
 from nltk import tokenize
 from nltk.corpus import wordnet as wn
 from nltk.parse.corenlp import CoreNLPDependencyParser
@@ -19,29 +19,33 @@ from nltk.tokenize import word_tokenize
 import pysolr
 
 import pandas as pd
+import csv
 
 
-class IndexCreation:
+class IndexCreation():
 
     def preprocessCorpus(self, path):
         print("Pre-processing and Tokenizing...")
         data = self.readArticles(path)
         data = self.removeArticleTitle(data)
-        
+
         indexWordsMap = self.createIndexMap(data)
+        with io.open('MainData.csv', 'w', encoding='utf-8', errors='ignore') as f:
+            w = csv.writer(f)
+            w.writerows(indexWordsMap.items())
         wordsDFrame = pd.DataFrame(list(indexWordsMap.items()), columns=['id', 'words'])
-        
+
         jsonFileName = 'Task2.json'
         wordsDFrame.to_json(jsonFileName, orient='records')
         return data, indexWordsMap, wordsDFrame, jsonFileName
-        
+
     def readArticles(self, path):
         data = []
         for f in sorted(os.listdir(path), key=lambda x: int(x.split('.')[0])):
             with io.open(path + f, 'r', encoding='utf-8', errors='ignore') as dataFile:
                 data.append(dataFile.read())
         return data
-    
+
     def removeArticleTitle(self, data):
         for i in range(len(data)):
             sentences = tokenize.sent_tokenize(data.pop(i).strip())
@@ -50,7 +54,7 @@ class IndexCreation:
                 sentences.insert(0, temp[1])
             data.insert(i, sentences)
         return data
-    
+
     def createIndexMap(self, data):
         indexWordsMap = collections.OrderedDict()
         for i in range(0, len(data)):
@@ -58,7 +62,7 @@ class IndexCreation:
                 index = 'A' + str(i + 1) + 'S' + str(j + 1)
                 indexWordsMap[index] = list(set(word_tokenize(data[i][j])))
         return indexWordsMap
-    
+
     def extractFeatures(self, data, indexWordsMap):
         wordsDFrame = pd.DataFrame(list(indexWordsMap.items()), columns=['id', 'words'])
         indexLemmaMap = self.lemmatizeWords(indexWordsMap)
@@ -68,7 +72,7 @@ class IndexCreation:
         indexPOSMap = self.tagPOSWords(indexWordsMap)
         POSDFrame = pd.DataFrame(list(indexPOSMap.items()), columns=['id', 'POS'])
         indexHeadMap = self.findHeadWord(data)
-        HeadDFrame = pd.DataFrame(list(indexHeadMap.items()), columns=['id', 'head'])  
+        HeadDFrame = pd.DataFrame(list(indexHeadMap.items()), columns=['id', 'head'])
         indexHypernymMap = self.extractHypernyms(indexWordsMap)
         HypernymDFrame = pd.DataFrame(list(indexHypernymMap.items()), columns=['id', 'hypernyms'])
         indexHyponymMap = self.extractHyponyms(indexWordsMap)
@@ -79,11 +83,11 @@ class IndexCreation:
         HolonymDFrame = pd.DataFrame(list(indexHolonymMap.items()), columns=['id', 'holonyms'])
         dfList = [wordsDFrame, lemmaDFrame, stemDFrame, POSDFrame, HeadDFrame, HypernymDFrame, HyponymDFrame, MeronymDFrame, HolonymDFrame]
         finalDFrame = reduce(lambda left, right: pd.merge(left, right, on='id'), dfList)
-        
+
         jsonFileName = 'Task3.json'
         finalDFrame.to_json(jsonFileName, orient='records')
         return jsonFileName
-    
+
     def lemmatizeWords(self, indexWordsMap):
         print("Lemmatizing...")
         indexLemmaMap = collections.OrderedDict()
@@ -91,7 +95,7 @@ class IndexCreation:
         for k, v in indexWordsMap.items():
             indexLemmaMap[k] = [wnl.lemmatize(word) for word in v]
         return indexLemmaMap
-    
+
     def stemWords(self, indexWordsMap):
         print("Stemming...")
         indexStemMap = collections.OrderedDict()
@@ -99,7 +103,7 @@ class IndexCreation:
         for k, v in indexWordsMap.items():
             indexStemMap[k] = [stemmer.stem(word) for word in v]
         return indexStemMap
-    
+
     def tagPOSWords(self, indexWordsMap):
         print("POS Tagging...")
         indexPOSMap = collections.OrderedDict()
@@ -109,7 +113,7 @@ class IndexCreation:
                 posTags.append(taggedWord[1])
             indexPOSMap[k] = posTags
         return indexPOSMap
-    
+
     def findHeadWord(self, data):
         print("Head Word Extraction...")
         indexHeadMap = collections.OrderedDict()
@@ -123,8 +127,8 @@ class IndexCreation:
                     if n['address'] == rootValue:
                         indexHeadMap[index] = n['word']
                         break
-        return indexHeadMap 
-    
+        return indexHeadMap
+
     def extractHypernyms(self, indexWordsMap):
         print("Hypernyms Extraction...")
         indexHypernymMap = collections.OrderedDict()
@@ -140,7 +144,7 @@ class IndexCreation:
                     hypernymList.append(word)
             indexHypernymMap[k] = hypernymList
         return indexHypernymMap
-    
+
     def extractHyponyms(self, indexWordsMap):
         print("Hyponyms Extraction...")
         indexHyponymMap = collections.OrderedDict()
@@ -156,7 +160,7 @@ class IndexCreation:
                     hyponymList.append(word)
             indexHyponymMap[k] = hyponymList
         return indexHyponymMap
-    
+
     def extractMeronyms(self, indexWordsMap):
         print("Meronyms Extraction...")
         indexMeronymMap = collections.OrderedDict()
@@ -171,7 +175,7 @@ class IndexCreation:
                     meronymList.append(word)
             indexMeronymMap[k] = meronymList
         return indexMeronymMap
-    
+
     def extractHolonyms(self, indexWordsMap):
         print("Holonyms Extraction...")
         indexHolonymMap = collections.OrderedDict()
@@ -186,22 +190,13 @@ class IndexCreation:
                     holonymList.append(word)
             indexHolonymMap[k] = holonymList
         return indexHolonymMap
- 
-    # Refer https://github.com/Parsely/python-solr/blob/master/pythonsolr/pysolr.py 
-    def indexWordsWithSolr(self, jsonFileName):
-        print("Indexing for Task2...")
-        solr = pysolr.Solr('http://localhost:8983/solr/task2')
-        solr.delete(q='*:*')
-        
-        with open("/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/" + jsonFileName, 'rb') as jsonFile:
-            entry = json.load(jsonFile)
-        solr.add(entry)
-        
+
+    # Refer https://github.com/Parsely/python-solr/blob/master/pythonsolr/pysolr.py
     def indexFeaturesWithSolr(self, jsonFileName):
-        print("Indexing for Task3...")
+        print("Indexing...")
         solr = pysolr.Solr('http://localhost:8983/solr/task3')
-        solr.delete(q='*:*')
-        
+        # solr.delete(q='*:*')
+
         with open("/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/" + jsonFileName, 'rb') as jsonFile:
             entry = json.load(jsonFile)
         solr.add(entry)
@@ -211,8 +206,7 @@ if __name__ == '__main__':
     ic = IndexCreation()
     path = '/Users/deepaks/Documents/workspace/Semantic_Search_Engine/Data/'
     data, indexWordsMap, wordsDFrame, jsonFileName = ic.preprocessCorpus(path)
-    ic.indexWordsWithSolr('Task2.json')
-    
+    ic.indexFeaturesWithSolr(jsonFileName)
+
     jsonFileName = ic.extractFeatures(data, indexWordsMap)
-    ic.indexFeaturesWithSolr('Task3.json')
-    
+    ic.indexFeaturesWithSolr(jsonFileName)
