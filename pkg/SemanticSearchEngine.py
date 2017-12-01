@@ -3,6 +3,10 @@ Created on Oct 30, 2017
 
 @author: deepaks
 '''
+import collections
+import os
+import sys
+
 from nltk import pos_tag 
 from nltk.corpus import wordnet as wn
 from nltk.parse.corenlp import CoreNLPDependencyParser
@@ -11,19 +15,37 @@ from nltk.stem.porter import PorterStemmer
 from nltk.tokenize import word_tokenize
 import pysolr
 
+from pkg.IndexCreation import IndexCreation
+
 
 class SemanticSearchEngine:
+    
+    def getArticleAndWordCount(self, path):
+        print("Number of articles:", str(len(os.listdir(path))))
+        indexSentenceMap = collections.OrderedDict()
+        wordCount = 0
+        ic = IndexCreation()
+        data = ic.readArticles(path)
+        data = ic.removeArticleTitle(data)
+        for i in range(0, len(data)):
+            for j in range(0, len(data[i])):
+                tokenizedWords = word_tokenize(data[i][j])
+                index = 'A' + str(i + 1) + 'S' + str(j + 1)
+                indexSentenceMap[index] = data[i][j]
+                wordCount += len(tokenizedWords)
+        print("Number of words in the corpus:", str(wordCount))
+        return indexSentenceMap
 
     def processQueryToExtractWords(self, query):
         return list(set(word_tokenize(query)))
     
-    def searchInSolr(self, query):
+    def searchInSolr(self, query, indexSentenceMap):
         solr = pysolr.Solr('http://localhost:8983/solr/task2')
-        query = "words:" + " && words:".join(query)
+        query = "words:" + " || words:".join(query)
         results = solr.search(query)
         print("Top 10 documents that closely match the query")
         for result in results:
-            print(result['id'])
+            print(result['id'].ljust(10), indexSentenceMap[result['id']])
     
     def processQueryToDoLemmatization(self, words):
         lemmas = []
@@ -116,8 +138,12 @@ class SemanticSearchEngine:
         holonyms = self.processQueryToExtractHolonyms(words)
         return [words, lemmas, stems, posTags, headWord, hypernyms, hyponyms, meronyms, holonyms]
     
-    def searchInSolrWithMultipleFeatures(self, featuresList):
+    def searchInSolrWithMultipleFeatures(self, featuresList, indexSentenceMap):
         solr = pysolr.Solr('http://localhost:8983/solr/task3')
+        params = {'defType': 'dismax',
+                  'qf':'words^1.0 lemmas^1.0 stems^1.0 POS^1.0 head^1.0 hypernyms^1.0 hyponyms^1.0 meronyms^1.0 holonyms^1.0'
+                  }
+     
         query1 = "words:" + " || words:".join(featuresList[0])
         query2 = "lemmas:" + " || lemmas:".join(featuresList[1])
         query3 = "stems:" + " || stems:".join(featuresList[2])
@@ -130,21 +156,51 @@ class SemanticSearchEngine:
         query = [query1, query2, query3, query4, query5, query6, query7, query8, query9]
         joinedQuery = ' || '.join(item for item in query)
         results = solr.search(joinedQuery)
-        print("Top 10 documents that closely match the query1")
+        results1 = solr.search(joinedQuery, **params)
+        print()
+        print("Top 10 documents that closely match the query")
         for result in results:
-            print(result['id'])
+            print(result['id'].ljust(10), indexSentenceMap[result['id']])
+        print()
+        print("Top 10 documents that closely match the query1")
+        for result in results1:
+            print(result['id'].ljust(10), indexSentenceMap[result['id']])
+            
+#     def goldenSetRetrieval(self, query):
+#         with open('/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/MainData.csv', 'r', encoding='utf-8', errors='ignore') as infile:
+#             reader = csv.reader(infile)
+#             indexWordsMap = {rows[0]:rows[1] for rows in reader}
+#         processedQuery = self.processQueryToExtractWords(query)
+#         countMap = dict()
+#         for k, v in indexWordsMap.items():
+#             count = 0
+#             for word in processedQuery:
+#                 if word in v:
+#                     count += 1
+#             countMap[k] = count
+#         countMap = sorted(countMap.items(), key=operator.itemgetter(1), reverse=True)
+#         count = 0
+#         for item in countMap:
+#             k, v = item
+#             print(k)
+#             count += 1
+#             if(count == 10):
+#                 break
 
     
 if __name__ == '__main__':
     sse = SemanticSearchEngine()
-    inputChoice = input("Enter the option to continue with\n 1. Task2 \n 2. Task3\n")
+    path = '/Users/deepaks/Documents/workspace/Semantic_Search_Engine/Data/'
+    inputChoice = input("Enter the option to continue with\n 1. Task2 \n 2. Task3\n") 
+    indexSentenceMap = sse.getArticleAndWordCount(path)
     query = input("Enter the input query: ")
+    # sse.goldenSetRetrieval(query)
     # Task 2
     if inputChoice == "1":
         processedQuery = sse.processQueryToExtractWords(query)
-        sse.searchInSolr(processedQuery) 
+        sse.searchInSolr(processedQuery, indexSentenceMap) 
     # Task 3
     elif inputChoice == "2":
         featuresList = sse.processQueryToExtractAllFeatures(query)
-        sse.searchInSolrWithMultipleFeatures(featuresList)
+        sse.searchInSolrWithMultipleFeatures(featuresList, indexSentenceMap)
         
