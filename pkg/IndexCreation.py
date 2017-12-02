@@ -96,15 +96,15 @@ class IndexCreation():
         lemmaDFrame = pd.DataFrame(list(indexLemmaMap.items()), columns=['id', 'lemmas'])
         indexStemMap = self.stemWords(indexWordsMap)
         stemDFrame = pd.DataFrame(list(indexStemMap.items()), columns=['id', 'stems'])
-        indexHeadMap = self.findHeadWord(data)
+        indexHeadMap = self.findImprovisedHeadWord(data)
         HeadDFrame = pd.DataFrame(list(indexHeadMap.items()), columns=['id', 'head'])
-        indexHypernymMap = self.extractHypernyms(indexWordsMap)
+        indexHypernymMap = self.extractImprovisedHypernyms(indexWordsMap)
         HypernymDFrame = pd.DataFrame(list(indexHypernymMap.items()), columns=['id', 'hypernyms'])
-        indexHyponymMap = self.extractHyponyms(indexWordsMap)
+        indexHyponymMap = self.extractImprovisedHyponyms(indexWordsMap)
         HyponymDFrame = pd.DataFrame(list(indexHyponymMap.items()), columns=['id', 'hyponyms'])
-        indexMeronymMap = self.extractMeronyms(indexWordsMap)
+        indexMeronymMap = self.extractImprovisedMeronyms(indexWordsMap)
         MeronymDFrame = pd.DataFrame(list(indexMeronymMap.items()), columns=['id', 'meronyms'])
-        indexHolonymMap = self.extractHolonyms(indexWordsMap)
+        indexHolonymMap = self.extractImprovisedHolonyms(indexWordsMap)
         HolonymDFrame = pd.DataFrame(list(indexHolonymMap.items()), columns=['id', 'holonyms'])
         dfList = [wordsDFrame, lemmaDFrame, stemDFrame, POSDFrame, HeadDFrame, HypernymDFrame, HyponymDFrame, MeronymDFrame, HolonymDFrame]
         finalDFrame = reduce(lambda left, right: pd.merge(left, right, on='id'), dfList)
@@ -122,7 +122,7 @@ class IndexCreation():
         return indexLemmaMap
     
     def improvedLemmatizeWords(self, indexPOSWithWordsMap):
-        print("Improved Lemmatizing...")
+        print("Improvised Lemmatizing...")
         indexLemmaMap = collections.OrderedDict()
         wnl = WordNetLemmatizer()
         for k, v in indexPOSWithWordsMap.items():
@@ -187,6 +187,29 @@ class IndexCreation():
                         indexHeadMap[index] = n['word']
                         break
         return indexHeadMap
+    
+    def findImprovisedHeadWord(self, data):
+        print("Improvised Head Word Extraction...")
+        indexHeadMap = collections.OrderedDict()
+        dependency_parser = CoreNLPDependencyParser('http://localhost:9000')
+        for i in range(0, len(data)):
+            for j in range(0, len(data[i])):
+                index = 'A' + str(i + 1) + 'S' + str(j + 1)
+                parsedSentence = list(dependency_parser.raw_parse(data[i][j]))[0]
+                rootValue = list(list(parsedSentence.nodes.values())[0]['deps']['ROOT'])[0]
+                for n in parsedSentence.nodes.values():
+                    if n['address'] == rootValue:
+                        headWord = n['word']
+                        if len(headWord) > 0:
+                            _, tag = pos_tag([headWord])[0]
+                            wnTag = IndexCreation().getWordnetTag(tag)
+                            if wnTag is not None:
+                                synset = wn.synsets(headWord, pos=wnTag)
+                                if len(synset) > 0:
+                                    headWord = synset[0].name()
+                        indexHeadMap[index] = headWord
+                        break
+        return indexHeadMap
 
     def extractHypernyms(self, indexWordsMap):
         print("Hypernyms Extraction...")
@@ -201,6 +224,25 @@ class IndexCreation():
                         hypernymList.append(synset[0].hypernyms()[0].name().split('.')[0])
                 else:
                     hypernymList.append(word)
+            indexHypernymMap[k] = hypernymList
+        return indexHypernymMap
+    
+    def extractImprovisedHypernyms(self, indexWordsMap):
+        print("Improvised Hypernyms Extraction...")
+        indexHypernymMap = collections.OrderedDict()
+        for k, v in indexWordsMap.items():
+            hypernymList = []
+            '''Can use common Hypernyms for Task 4'''
+            for word in v:
+                _, tag = pos_tag([word])[0]
+                wnTag = IndexCreation().getWordnetTag(tag)
+                if wnTag is not None:
+                    synset = wn.synsets(word, pos=wnTag)
+                else:
+                    synset = wn.synsets(word)
+                if len(synset) > 0:
+                    if len(synset[0].hypernyms()) > 0:
+                        hypernymList.append(synset[0].hypernyms()[0].name().split('.')[0])
             indexHypernymMap[k] = hypernymList
         return indexHypernymMap
 
@@ -219,6 +261,25 @@ class IndexCreation():
                     hyponymList.append(word)
             indexHyponymMap[k] = hyponymList
         return indexHyponymMap
+    
+    def extractImprovisedHyponyms(self, indexWordsMap):
+        print("Improvised Hyponyms Extraction...")
+        indexHyponymMap = collections.OrderedDict()
+        for k, v in indexWordsMap.items():
+            hyponymList = []
+            '''Can use common Hyponyms for Task 4'''
+            for word in v:
+                _, tag = pos_tag([word])[0]
+                wnTag = IndexCreation().getWordnetTag(tag)
+                if wnTag is not None:
+                    synset = wn.synsets(word, pos=wnTag)
+                else:
+                    synset = wn.synsets(word)
+                if len(synset) > 0:
+                    if len(synset[0].hyponyms()) > 0:
+                        hyponymList.append(synset[0].hyponyms()[0].name().split('.')[0])
+            indexHyponymMap[k] = hyponymList
+        return indexHyponymMap
 
     def extractMeronyms(self, indexWordsMap):
         print("Meronyms Extraction...")
@@ -232,6 +293,24 @@ class IndexCreation():
                         meronymList.append(synset[0].part_meronyms()[0].name().split('.')[0])
                 else:
                     meronymList.append(word)
+            indexMeronymMap[k] = meronymList
+        return indexMeronymMap
+    
+    def extractImprovisedMeronyms(self, indexWordsMap):
+        print("Improvised Meronyms Extraction...")
+        indexMeronymMap = collections.OrderedDict()
+        for k, v in indexWordsMap.items():
+            meronymList = []
+            for word in v:
+                _, tag = pos_tag([word])[0]
+                wnTag = IndexCreation().getWordnetTag(tag)
+                if wnTag is not None:
+                    synset = wn.synsets(word, pos=wnTag)
+                else:
+                    synset = wn.synsets(word)
+                if len(synset) > 0:
+                    if len(synset[0].part_meronyms()) > 0:
+                        meronymList.append(synset[0].part_meronyms()[0].name().split('.')[0])
             indexMeronymMap[k] = meronymList
         return indexMeronymMap
 
@@ -249,13 +328,30 @@ class IndexCreation():
                     holonymList.append(word)
             indexHolonymMap[k] = holonymList
         return indexHolonymMap
+    
+    def extractImprovisedHolonyms(self, indexWordsMap):
+        print("Improvised Holonyms Extraction...")
+        indexHolonymMap = collections.OrderedDict()
+        for k, v in indexWordsMap.items():
+            holonymList = []
+            for word in v:
+                _, tag = pos_tag([word])[0]
+                wnTag = IndexCreation().getWordnetTag(tag)
+                if wnTag is not None:
+                    synset = wn.synsets(word, pos=wnTag)
+                else:
+                    synset = wn.synsets(word)
+                if len(synset) > 0:
+                    if len(synset[0].part_holonyms()) > 0:
+                        holonymList.append(synset[0].part_holonyms()[0].name().split('.')[0])
+            indexHolonymMap[k] = holonymList
+        return indexHolonymMap
 
     # Refer https://github.com/Parsely/python-solr/blob/master/pythonsolr/pysolr.py
     def indexFeaturesWithSolr(self, jsonFileName, inputChoice):
         print("Indexing...")
         solr = pysolr.Solr('http://localhost:8983/solr/task' + str(int(inputChoice) + 1))
-        # solr.delete(q='*:*')
-
+        solr.delete(q='*:*')
         with open("/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/" + jsonFileName, 'rb') as jsonFile:
             entry = json.load(jsonFile)
         solr.add(entry)
@@ -273,5 +369,5 @@ if __name__ == '__main__':
         ic.indexFeaturesWithSolr(jsonFileName, inputChoice)
     elif inputChoice == "3":
         jsonFileName = ic.extractImprovisedFeatures(data, indexWordsMap)
-        ic.indexFeaturesWithSolr(jsonFileName, inputChoice)
+        ic.indexFeaturesWithSolr('task4.json', inputChoice)
     
