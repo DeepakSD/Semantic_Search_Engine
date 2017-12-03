@@ -12,6 +12,7 @@ from nltk.parse.corenlp import CoreNLPDependencyParser
 from nltk.stem import WordNetLemmatizer
 from nltk.stem.porter import PorterStemmer
 from nltk.tokenize import word_tokenize
+from nltk.wsd import lesk
 import pysolr
 
 from pkg.IndexCreation import IndexCreation
@@ -211,6 +212,22 @@ class SemanticSearchEngine:
                 if len(synset[0].part_holonyms()) > 0:
                     holonyms.append(synset[0].part_holonyms()[0].name().split('.')[0])
         return holonyms
+        
+    def processQueryToExtractWSD(self, words):
+        wsd = []
+        tags = pos_tag(words)
+        for word in words:
+            for each in range(0,len(words)):
+                tag = tags[each][1]
+                wsd.append(lesk(words,words[each],pos=self.getWordnetTagLesk(tag)))
+        return wsd
+        
+    def processQueryToExtractHeadWordWSD(self, headWord):
+        wsd = []
+        tags = pos_tag(headWord)
+        tag = tags[1]
+        wsd.append(lesk(headWord,headWord[0],pos=self.getWordnetTagLesk(tag)))
+        return wsd
     
     def processQueryToExtractAllFeatures(self, query):
         words = self.processQueryToExtractWords(query)
@@ -234,7 +251,9 @@ class SemanticSearchEngine:
         hyponyms = self.processQueryToExtractImprovisedHyponyms(posTags)
         meronyms = self.processQueryToExtractImprovisedMeronyms(posTags)
         holonyms = self.processQueryToExtractImprovisedHolonyms(posTags)
-        return [words, lemmas, stems, posTags, headWord, hypernyms, hyponyms, meronyms, holonyms]
+        wsd = self.processQueryToExtractWSD(words)
+        headwsd = self.processQueryToExtractHeadWordWSD(headWord)
+        return [words, lemmas, stems, posTags, headWord, hypernyms, hyponyms, meronyms, holonyms,wsd,headwsd]
     
     def searchInSolrWithMultipleFeatures(self, featuresList, indexSentenceMap):
         solr = pysolr.Solr('http://localhost:8983/solr/task3')
@@ -270,7 +289,9 @@ class SemanticSearchEngine:
         query7 = "hyponyms:" + " || hyponyms:".join(featuresList[6])
         query8 = "meronyms:" + " || meronyms:".join(featuresList[7])
         query9 = "holonyms:" + " || holonyms:".join(featuresList[8])
-        query = [query1, query2, query3, query4, query5, query6, query7, query8, query9]
+        query10 = "wsd:" + " || wsd:".join(featuresList[9])
+        query11 = "headwsd:" + " || headwsd:".join(featuresList[10])
+        query = [query1, query2, query3, query4, query5, query6, query7, query8, query9,query10,query11]
         joinedQuery = ' || '.join(item for item in query)
         results = solr.search(joinedQuery)
         print()

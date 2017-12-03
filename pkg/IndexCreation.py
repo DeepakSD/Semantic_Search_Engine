@@ -1,13 +1,18 @@
 '''
 Created on Nov 22, 2017
 
-@author: deepaks
+@authors: Deepak S, Vidya Mani, Mohanakrishna
 '''
+
+
 from _functools import reduce
 import collections
 import io
 import json
 import os
+import pysolr
+import pandas as pd
+import csv
 
 from nltk import pos_tag
 from nltk import tokenize
@@ -16,10 +21,8 @@ from nltk.parse.corenlp import CoreNLPDependencyParser
 from nltk.stem import WordNetLemmatizer
 from nltk.stem.porter import PorterStemmer
 from nltk.tokenize import word_tokenize
-import pysolr
+from nltk.wsd import lesk
 
-import pandas as pd
-import csv
 
 
 class IndexCreation():
@@ -30,7 +33,7 @@ class IndexCreation():
         data = self.removeArticleTitle(data)
 
         indexWordsMap = self.createIndexMap(data)
-        with io.open('MainData.csv', 'w', encoding='utf-8', errors='ignore') as f:
+        with io.open('data.csv', 'w', encoding='utf-8', errors='ignore') as f:
             w = csv.writer(f)
             w.writerows(indexWordsMap.items())
         wordsDFrame = pd.DataFrame(list(indexWordsMap.items()), columns=['id', 'words'])
@@ -106,7 +109,11 @@ class IndexCreation():
         MeronymDFrame = pd.DataFrame(list(indexMeronymMap.items()), columns=['id', 'meronyms'])
         indexHolonymMap = self.extractImprovisedHolonyms(indexWordsMap)
         HolonymDFrame = pd.DataFrame(list(indexHolonymMap.items()), columns=['id', 'holonyms'])
-        dfList = [wordsDFrame, lemmaDFrame, stemDFrame, POSDFrame, HeadDFrame, HypernymDFrame, HyponymDFrame, MeronymDFrame, HolonymDFrame]
+        indexWSDMap = self.extractWSD(indexWordsMap)
+        WSDDFrame = pd.DataFrame(list(indexWSDMap.items()), columns=['id', 'wsds'])
+        indexWSDHeadWordMap = self.extractWSDForHeadWord(indexHeadMap)
+        WSDHeadWordDFrame = pd.DataFrame(list(indexWSDHeadWordMap.items()), columns=['id', 'head_wsds'])
+        dfList = [wordsDFrame, lemmaDFrame, stemDFrame, POSDFrame, HeadDFrame, HypernymDFrame, HyponymDFrame, MeronymDFrame, HolonymDFrame,WSDDFrame,WSDHeadWordDFrame]
         finalDFrame = reduce(lambda left, right: pd.merge(left, right, on='id'), dfList)
 
         jsonFileName = 'Task4.json'
@@ -147,7 +154,7 @@ class IndexCreation():
             return wn.ADV
         else:
             return None
-
+            
     def stemWords(self, indexWordsMap):
         print("Stemming...")
         indexStemMap = collections.OrderedDict()
@@ -346,20 +353,56 @@ class IndexCreation():
                         holonymList.append(synset[0].part_holonyms()[0].name().split('.')[0])
             indexHolonymMap[k] = holonymList
         return indexHolonymMap
-
+    
+    def getWordnetTagLesk(self,tag):
+        if tag.startswith('J'):
+            return 'j'
+        elif tag.startswith('V'):
+            return 'v'
+        elif tag.startswith('N'):
+            return 'n'
+        elif tag.startswith('R'):
+            return 'r'
+        else:
+            return None
+        
+    def extractWSD(self, indexWordsMap):
+        print("Word Sense Disambiguation...")
+        indexWSDMap = collections.OrderedDict()
+        for k, v in indexWordsMap.items():
+            wsd = []
+            tags = pos_tag(v)
+            for word in v:
+                for each in range(0,len(v)):
+                    tag = tags[each][1]
+                    wsd.append(lesk(v,v[each],pos=self.getWordnetTagLesk(tag)))
+            indexWSDMap[k]=wsd
+        return indexWSDMap
+        
+    def extractWSDForHeadWord(self,indexHeadMap):
+        print("Improvised Word Sense Diambiguation..")
+        indexWSDMap = collections.OrderedDict()
+        for k,v in indexHeadMap.items():
+            wsd = []
+            tags = pos_tag(v)
+            tag = tags[1]
+            wsd.append(v,v[0],pos=self.getWordnetTagLesk(tag))
+            indexWSDMap[k]=wsd    
+        return indexWSDMap
+        
     # Refer https://github.com/Parsely/python-solr/blob/master/pythonsolr/pysolr.py
     def indexFeaturesWithSolr(self, jsonFileName, inputChoice):
         print("Indexing...")
         solr = pysolr.Solr('http://localhost:8983/solr/task' + str(int(inputChoice) + 1))
         solr.delete(q='*:*')
-        with open("/Users/deepaks/Documents/workspace/Semantic_Search_Engine/pkg/" + jsonFileName, 'rb') as jsonFile:
+        with open("/home/mohanakrishnavh/Desktop/NLP/NLPV4/Semantic_Search_Engine/pkg/" + jsonFileName, 'r') as jsonFile:
             entry = json.load(jsonFile)
         solr.add(entry)
 
 
 if __name__ == '__main__':
     ic = IndexCreation()
-    path = '/Users/deepaks/Documents/workspace/Semantic_Search_Engine/Data/'
+    path = '/home/mohanakrishnavh/Desktop/NLP/NLPV4/Semantic_Search_Engine/Data/'
     inputChoice = input("Enter the option to continue with\n 1. Task2 \n 2. Task3\n 3. Task4\n ") 
     data, indexWordsMap, wordsDFrame, jsonFileName = ic.preprocessCorpus(path)
     if inputChoice == "1":
