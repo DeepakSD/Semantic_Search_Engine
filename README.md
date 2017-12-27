@@ -24,7 +24,7 @@ Task 4: Improve the shallow NLP pipeline results using a combination of deeper N
 
 ## Result and Analysis
 
-We will use rank of the query sentence and Mean Reciprocal Rank(MRR) to analyze our search results.
+We will use rank of the query sentence and Mean Reciprocal Rank(MRR) to analyze our search results. We achieved an accuracy of 63%.
 
 ## Technology Used
 
