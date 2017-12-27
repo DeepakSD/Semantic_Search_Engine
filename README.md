@@ -4,8 +4,8 @@ Authors: Deepak Shanmugam, Mohanakrishna V H, Vidya Sri Mani
 
 ## Dataset Description
 
-The BBC news website sources 2225 documents which primarily covers five broad fields of interest namely business, entertainment, politics, sports and technology that was published between 2004 and 2005. This corpus collected from this source is used in proceeding tasks.
-Natural Classes: 5 (business, entertainment, politics, sport, tech) 
+The BBC news website sources 2225 documents which primarily covers five broad fields of interest namely business, entertainment, politics, sports and technology that was published between 2004 and 2005. This corpus collected from this source is used in proceeding tasks.  
+Natural Classes: 5 (business, entertainment, politics, sport, tech)  
 Link to the Corpus: http://mlg.ucd.ie/datasets/bbc.html
 
 ## Problem Description
