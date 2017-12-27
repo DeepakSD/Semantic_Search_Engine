@@ -6,7 +6,7 @@ Created on Oct 30, 2017
 import collections
 import os
 
-from nltk import pos_tag 
+from nltk import pos_tag
 from nltk.corpus import wordnet as wn
 from nltk.parse.corenlp import CoreNLPDependencyParser
 from nltk.stem import WordNetLemmatizer
@@ -41,7 +41,9 @@ class SemanticSearchEngine:
     def searchInSolr(self, query, indexSentenceMap):
         solr = pysolr.Solr('http://localhost:8983/solr/task2')
         query = "words:" + " || words:".join(query)
+        print("Joined Query: ", query)
         results = solr.search(query)
+        print()
         print("Top 10 documents that closely match the query")
         for result in results:
             print(result['id'].ljust(10), indexSentenceMap[result['id']])
@@ -106,9 +108,17 @@ class SemanticSearchEngine:
                     if wnTag is not None:
                         synset = wn.synsets(headWord, pos=wnTag)
                         if len(synset) > 0:
-                            headWord = synset[0].name()
+                            headWord = synset[0].name().split('.')[0]
                 break
-        return headWord 
+        return headWord
+    
+#     def processQueryToExtractHeadWordWSD(self, query, headWord):
+#         _, tag = pos_tag([headWord])[0]
+#         wsd = headWord
+#         wsdSynset = lesk(query, headWord, pos=IndexCreation().getWordnetTagLesk(tag))
+#         if len(wsdSynset) > 0:
+#             wsd = wsdSynset.name().split('.')[0]
+#         return wsd
     
     def processQueryToExtractHypernyms(self, words):
         hypernyms = []
@@ -137,7 +147,6 @@ class SemanticSearchEngine:
     def processQueryToExtractHyponyms(self, words):
         hyponyms = []
         for word in words:
-            '''Can use common Hyponyms for Task 4'''
             synset = wn.synsets(word)
             if len(synset) > 0:
                 if len(synset[0].hyponyms()) > 0:
@@ -149,7 +158,6 @@ class SemanticSearchEngine:
     def processQueryToExtractImprovisedHyponyms(self, posTags):
         hyponyms = []
         for word, tag in posTags:
-            '''Can use common Hyponyms for Task 4'''
             wnTag = IndexCreation().getWordnetTag(tag)
             if wnTag is not None:
                 synset = wn.synsets(word, pos=wnTag)
@@ -163,7 +171,6 @@ class SemanticSearchEngine:
     def processQueryToExtractMeronyms(self, words):
         meronyms = []
         for word in words:
-            '''Can use common Meronyms for Task 4'''
             synset = wn.synsets(word)
             if len(synset) > 0:
                 if len(synset[0].part_meronyms()) > 0:
@@ -175,7 +182,6 @@ class SemanticSearchEngine:
     def processQueryToExtractImprovisedMeronyms(self, posTags):
         meronyms = []
         for word, tag in posTags:
-            '''Can use common Meronyms for Task 4'''
             wnTag = IndexCreation().getWordnetTag(tag)
             if wnTag is not None:
                 synset = wn.synsets(word, pos=wnTag)
@@ -189,7 +195,6 @@ class SemanticSearchEngine:
     def processQueryToExtractHolonyms(self, words):
         holonyms = []
         for word in words:
-            '''Can use common Holonyms for Task 4'''
             synset = wn.synsets(word)
             if len(synset) > 0:
                 if len(synset[0].part_holonyms()) > 0:
@@ -201,7 +206,6 @@ class SemanticSearchEngine:
     def processQueryToExtractImprovisedHolonyms(self, posTags):
         holonyms = []
         for word, tag in posTags:
-            '''Can use common Holonyms for Task 4'''
             wnTag = IndexCreation().getWordnetTag(tag)
             if wnTag is not None:
                 synset = wn.synsets(word, pos=wnTag)
@@ -230,6 +234,7 @@ class SemanticSearchEngine:
         lemmas = self.processQueryToDoImprovedLemmatization(posTags)
         stems = self.processQueryToDoStemming(words)
         headWord = self.processQueryToExtractImprovisedHeadWord(query)
+#         headwsd = self.processQueryToExtractHeadWordWSD(query, headWord)
         hypernyms = self.processQueryToExtractImprovisedHypernyms(posTags)
         hyponyms = self.processQueryToExtractImprovisedHyponyms(posTags)
         meronyms = self.processQueryToExtractImprovisedMeronyms(posTags)
@@ -238,17 +243,27 @@ class SemanticSearchEngine:
     
     def searchInSolrWithMultipleFeatures(self, featuresList, indexSentenceMap):
         solr = pysolr.Solr('http://localhost:8983/solr/task3')
-        query1 = "words:" + " || words:".join(featuresList[0])
-        query2 = "lemmas:" + " || lemmas:".join(featuresList[1])
-        query3 = "stems:" + " || stems:".join(featuresList[2])
-        query4 = "POS:" + " || POS:".join(featuresList[3])
-        query5 = "head:" + featuresList[4]
-        query6 = "hypernyms:" + " || hypernyms:".join(featuresList[5])
-        query7 = "hyponyms:" + " || hyponyms:".join(featuresList[6])
-        query8 = "meronyms:" + " || meronyms:".join(featuresList[7])
-        query9 = "holonyms:" + " || holonyms:".join(featuresList[8])
-        query = [query1, query2, query3, query4, query5, query6, query7, query8, query9]
+        query = []
+        if len(featuresList[0]) > 0:
+            query.append("words:(" + " ".join(featuresList[0]) + ")")
+        if len(featuresList[1]) > 0:
+            query.append("lemmas:(" + " ".join(featuresList[1]) + ")")
+        if len(featuresList[2]) > 0:
+            query.append("stems:(" + " ".join(featuresList[2]) + ")")
+        if len(featuresList[3]) > 0:
+            query.append("POS:(" + " ".join(featuresList[3]) + ")")
+        if len(featuresList[4]) > 0:
+            query.append("head:(" + featuresList[4] + ")")
+        if len(featuresList[5]) > 0:
+            query.append("hypernyms:(" + " ".join(featuresList[5]) + ")")
+        if len(featuresList[6]) > 0:
+            query.append("hyponyms:(" + " ".join(featuresList[6]) + ")")
+        if len(featuresList[7]) > 0:
+            query.append("meronyms:(" + " ".join(featuresList[7]) + ")")
+        if len(featuresList[8]) > 0:
+            query.append("holonyms:(" + " ".join(featuresList[8]) + ")")
         joinedQuery = ' || '.join(item for item in query)
+        print("Joined Query: ", joinedQuery)
         results = solr.search(joinedQuery)
         print()
         print("Top 10 documents that closely match the query")
@@ -257,21 +272,27 @@ class SemanticSearchEngine:
             
     def searchInSolrWithMultipleImprovisedFeatures(self, featuresList, indexSentenceMap):
         solr = pysolr.Solr('http://localhost:8983/solr/task4')
-        params = {'defType': 'edismax',
-                  'qf':'words^1.0 lemmas^1.0 stems^1.0 POS^1.0 head^1.0 hypernyms^1.0 hyponyms^1.0 meronyms^1.0 holonyms^1.0'
-                  }
-     
-        query1 = "words:" + " || words:".join(featuresList[0])
-        query2 = "lemmas:" + " || lemmas:".join(featuresList[1])
-        query3 = "stems:" + " || stems:".join(featuresList[2])
-        query4 = "POSWithWords:" + " || POSWithWords:".join(str(term) for term in featuresList[3])
-        query5 = "head:" + featuresList[4]
-        query6 = "hypernyms:" + " || hypernyms:".join(featuresList[5])
-        query7 = "hyponyms:" + " || hyponyms:".join(featuresList[6])
-        query8 = "meronyms:" + " || meronyms:".join(featuresList[7])
-        query9 = "holonyms:" + " || holonyms:".join(featuresList[8])
-        query = [query1, query2, query3, query4, query5, query6, query7, query8, query9]
+        query = []
+        if len(featuresList[0]) > 0:
+            query.append("words:(" + " ".join(featuresList[0]) + ")^1.0")
+        if len(featuresList[1]) > 0:
+            query.append("lemmas:(" + " ".join(featuresList[1]) + ")^10.0")
+        if len(featuresList[2]) > 0:
+            query.append("stems:(" + " ".join(featuresList[2]) + ")^6.0")
+        if len(featuresList[3]) > 0:
+            query.append("POSWithWords:(" + " ".join(str(term) for term in featuresList[3]) + ")^1.0")
+        if len(featuresList[4]) > 0:
+            query.append("head:(" + featuresList[4] + ")^1.0")
+        if len(featuresList[5]) > 0:
+            query.append("hypernyms:(" + " ".join(featuresList[5]) + ")^7.0")
+        if len(featuresList[6]) > 0:
+            query.append("hyponyms:(" + " ".join(featuresList[6]) + ")^1.0")
+        if len(featuresList[7]) > 0:
+            query.append("meronyms:(" + " ".join(featuresList[7]) + ")^1.0")
+        if len(featuresList[8]) > 0:
+            query.append("holonyms:(" + " ".join(featuresList[8]) + ")^1.0")
         joinedQuery = ' || '.join(item for item in query)
+        print("Joined Query: ", joinedQuery)
         results = solr.search(joinedQuery)
         print()
         print("Top 10 documents that closely match the query")
