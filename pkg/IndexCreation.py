@@ -5,6 +5,7 @@ Created on Nov 22, 2017
 '''
 from _functools import reduce
 import collections
+import csv
 import io
 import json
 import os
@@ -19,7 +20,6 @@ from nltk.tokenize import word_tokenize
 import pysolr
 
 import pandas as pd
-import csv
 
 
 class IndexCreation():
@@ -29,7 +29,7 @@ class IndexCreation():
         data = self.readArticles(path)
         data = self.removeArticleTitle(data)
 
-        indexWordsMap = self.createIndexMap(data)
+        indexWordsMap, indexSentenceMap = self.createIndexMap(data)
         with io.open('MainData.csv', 'w', encoding='utf-8', errors='ignore') as f:
             w = csv.writer(f)
             w.writerows(indexWordsMap.items())
@@ -37,7 +37,7 @@ class IndexCreation():
 
         jsonFileName = 'Task2.json'
         wordsDFrame.to_json(jsonFileName, orient='records')
-        return data, indexWordsMap, wordsDFrame, jsonFileName
+        return data, indexWordsMap, indexSentenceMap, wordsDFrame, jsonFileName
 
     def readArticles(self, path):
         data = []
@@ -57,13 +57,15 @@ class IndexCreation():
 
     def createIndexMap(self, data):
         indexWordsMap = collections.OrderedDict()
+        indexSentenceMap = collections.OrderedDict()
         for i in range(0, len(data)):
             for j in range(0, len(data[i])):
                 index = 'A' + str(i + 1) + 'S' + str(j + 1)
+                indexSentenceMap[index] = data[i][j]
                 indexWordsMap[index] = list(set(word_tokenize(data[i][j])))
-        return indexWordsMap
+        return indexWordsMap, indexSentenceMap
 
-    def extractFeatures(self, data, indexWordsMap):
+    def extractFeatures(self, indexWordsMap, indexSentenceMap):
         wordsDFrame = pd.DataFrame(list(indexWordsMap.items()), columns=['id', 'words'])
         indexLemmaMap = self.lemmatizeWords(indexWordsMap)
         lemmaDFrame = pd.DataFrame(list(indexLemmaMap.items()), columns=['id', 'lemmas'])
@@ -71,7 +73,7 @@ class IndexCreation():
         stemDFrame = pd.DataFrame(list(indexStemMap.items()), columns=['id', 'stems'])
         indexPOSMap = self.tagPOSWords(indexWordsMap)
         POSDFrame = pd.DataFrame(list(indexPOSMap.items()), columns=['id', 'POS'])
-        indexHeadMap = self.findHeadWord(data)
+        indexHeadMap = self.findHeadWord(indexSentenceMap)
         HeadDFrame = pd.DataFrame(list(indexHeadMap.items()), columns=['id', 'head'])
         indexHypernymMap = self.extractHypernyms(indexWordsMap)
         HypernymDFrame = pd.DataFrame(list(indexHypernymMap.items()), columns=['id', 'hypernyms'])
@@ -88,7 +90,7 @@ class IndexCreation():
         finalDFrame.to_json(jsonFileName, orient='records')
         return jsonFileName
     
-    def extractImprovisedFeatures(self, data, indexWordsMap):
+    def extractImprovisedFeatures(self, indexWordsMap, indexSentenceMap):
         wordsDFrame = pd.DataFrame(list(indexWordsMap.items()), columns=['id', 'words'])
         indexPOSWithWordsMap = self.tagPOSWithWords(indexWordsMap)
         POSDFrame = pd.DataFrame(list(indexPOSWithWordsMap.items()), columns=['id', 'POSWithWords'])
@@ -96,8 +98,10 @@ class IndexCreation():
         lemmaDFrame = pd.DataFrame(list(indexLemmaMap.items()), columns=['id', 'lemmas'])
         indexStemMap = self.stemWords(indexWordsMap)
         stemDFrame = pd.DataFrame(list(indexStemMap.items()), columns=['id', 'stems'])
-        indexHeadMap = self.findImprovisedHeadWord(data)
+        indexHeadMap = self.findImprovisedHeadWord(indexSentenceMap)
         HeadDFrame = pd.DataFrame(list(indexHeadMap.items()), columns=['id', 'head'])
+#         indexWSDHeadWordMap = self.extractWSDForHeadWord(indexHeadMap, indexSentenceMap)
+#         WSDHeadWordDFrame = pd.DataFrame(list(indexWSDHeadWordMap.items()), columns=['id', 'head_wsds'])
         indexHypernymMap = self.extractImprovisedHypernyms(indexWordsMap)
         HypernymDFrame = pd.DataFrame(list(indexHypernymMap.items()), columns=['id', 'hypernyms'])
         indexHyponymMap = self.extractImprovisedHyponyms(indexWordsMap)
@@ -173,42 +177,38 @@ class IndexCreation():
             indexPOSWithWordsMap[k] = pos_tag(v)
         return indexPOSWithWordsMap
 
-    def findHeadWord(self, data):
+    def findHeadWord(self, indexSentenceMap):
         print("Head Word Extraction...")
         indexHeadMap = collections.OrderedDict()
         dependency_parser = CoreNLPDependencyParser('http://localhost:9000')
-        for i in range(0, len(data)):
-            for j in range(0, len(data[i])):
-                index = 'A' + str(i + 1) + 'S' + str(j + 1)
-                parsedSentence = list(dependency_parser.raw_parse(data[i][j]))[0]
-                rootValue = list(list(parsedSentence.nodes.values())[0]['deps']['ROOT'])[0]
-                for n in parsedSentence.nodes.values():
-                    if n['address'] == rootValue:
-                        indexHeadMap[index] = n['word']
-                        break
+        for k, v in indexSentenceMap.items():
+            parsedSentence = list(dependency_parser.raw_parse(v))[0]
+            rootValue = list(list(parsedSentence.nodes.values())[0]['deps']['ROOT'])[0]
+            for n in parsedSentence.nodes.values():
+                if n['address'] == rootValue:
+                    indexHeadMap[k] = n['word']
+                    break
         return indexHeadMap
     
-    def findImprovisedHeadWord(self, data):
+    def findImprovisedHeadWord(self, indexSentenceMap):
         print("Improvised Head Word Extraction...")
         indexHeadMap = collections.OrderedDict()
         dependency_parser = CoreNLPDependencyParser('http://localhost:9000')
-        for i in range(0, len(data)):
-            for j in range(0, len(data[i])):
-                index = 'A' + str(i + 1) + 'S' + str(j + 1)
-                parsedSentence = list(dependency_parser.raw_parse(data[i][j]))[0]
-                rootValue = list(list(parsedSentence.nodes.values())[0]['deps']['ROOT'])[0]
-                for n in parsedSentence.nodes.values():
-                    if n['address'] == rootValue:
-                        headWord = n['word']
-                        if len(headWord) > 0:
-                            _, tag = pos_tag([headWord])[0]
-                            wnTag = IndexCreation().getWordnetTag(tag)
-                            if wnTag is not None:
-                                synset = wn.synsets(headWord, pos=wnTag)
-                                if len(synset) > 0:
-                                    headWord = synset[0].name()
-                        indexHeadMap[index] = headWord
-                        break
+        for k, v in indexSentenceMap.items():
+            parsedSentence = list(dependency_parser.raw_parse(v))[0]
+            rootValue = list(list(parsedSentence.nodes.values())[0]['deps']['ROOT'])[0]
+            for n in parsedSentence.nodes.values():
+                if n['address'] == rootValue:
+                    headWord = n['word']
+                    if len(headWord) > 0:
+                        _, tag = pos_tag([headWord])[0]
+                        wnTag = IndexCreation().getWordnetTag(tag)
+                        if wnTag is not None:
+                            synset = wn.synsets(headWord, pos=wnTag)
+                            if len(synset) > 0:
+                                headWord = synset[0].name().split('.')[0]
+                    indexHeadMap[k] = headWord
+                    break
         return indexHeadMap
 
     def extractHypernyms(self, indexWordsMap):
@@ -216,7 +216,6 @@ class IndexCreation():
         indexHypernymMap = collections.OrderedDict()
         for k, v in indexWordsMap.items():
             hypernymList = []
-            '''Can use common Hypernyms for Task 4'''
             for word in v:
                 synset = wn.synsets(word)
                 if len(synset) > 0:
@@ -232,7 +231,6 @@ class IndexCreation():
         indexHypernymMap = collections.OrderedDict()
         for k, v in indexWordsMap.items():
             hypernymList = []
-            '''Can use common Hypernyms for Task 4'''
             for word in v:
                 _, tag = pos_tag([word])[0]
                 wnTag = IndexCreation().getWordnetTag(tag)
@@ -251,7 +249,6 @@ class IndexCreation():
         indexHyponymMap = collections.OrderedDict()
         for k, v in indexWordsMap.items():
             hyponymList = []
-            '''Can use common Hyponyms for Task 4'''
             for word in v:
                 synset = wn.synsets(word)
                 if len(synset) > 0:
@@ -267,7 +264,6 @@ class IndexCreation():
         indexHyponymMap = collections.OrderedDict()
         for k, v in indexWordsMap.items():
             hyponymList = []
-            '''Can use common Hyponyms for Task 4'''
             for word in v:
                 _, tag = pos_tag([word])[0]
                 wnTag = IndexCreation().getWordnetTag(tag)
@@ -346,8 +342,32 @@ class IndexCreation():
                         holonymList.append(synset[0].part_holonyms()[0].name().split('.')[0])
             indexHolonymMap[k] = holonymList
         return indexHolonymMap
+    
+    # New Features
+    def getWordnetTagLesk(self, tag):
+        if tag.startswith('J'):
+            return 'j'
+        elif tag.startswith('V'):
+            return 'v'
+        elif tag.startswith('N'):
+            return 'n'
+        elif tag.startswith('R'):
+            return 'r'
+        else:
+            return None
+        
+#     def extractWSDForHeadWord(self, indexHeadMap, indexSentenceMap):
+#         print("Improvised Head-Word Sense Diambiguation..")
+#         indexWSDMap = collections.OrderedDict()
+#         for k, v in indexHeadMap.items():
+#             wsd = v
+#             word, tag = pos_tag([v])[0]
+#             wsdSynset = lesk(indexSentenceMap[k], word, pos=self.getWordnetTagLesk(tag))
+#             if len(wsdSynset) > 0:
+#                 wsd = wsdSynset.name().split('.')[0]
+#             indexWSDMap[k] = wsd    
+#         return indexWSDMap
 
-    # Refer https://github.com/Parsely/python-solr/blob/master/pythonsolr/pysolr.py
     def indexFeaturesWithSolr(self, jsonFileName, inputChoice):
         print("Indexing...")
         solr = pysolr.Solr('http://localhost:8983/solr/task' + str(int(inputChoice) + 1))
@@ -361,13 +381,13 @@ if __name__ == '__main__':
     ic = IndexCreation()
     path = '/Users/deepaks/Documents/workspace/Semantic_Search_Engine/Data/'
     inputChoice = input("Enter the option to continue with\n 1. Task2 \n 2. Task3\n 3. Task4\n ") 
-    data, indexWordsMap, wordsDFrame, jsonFileName = ic.preprocessCorpus(path)
+    data, indexWordsMap, indexSentenceMap, wordsDFrame, jsonFileName = ic.preprocessCorpus(path)
     if inputChoice == "1":
         ic.indexFeaturesWithSolr(jsonFileName, inputChoice)
     elif inputChoice == "2":
-        jsonFileName = ic.extractFeatures(data, indexWordsMap)
+        jsonFileName = ic.extractFeatures(indexWordsMap, indexSentenceMap)
         ic.indexFeaturesWithSolr(jsonFileName, inputChoice)
     elif inputChoice == "3":
-        jsonFileName = ic.extractImprovisedFeatures(data, indexWordsMap)
-        ic.indexFeaturesWithSolr('task4.json', inputChoice)
+        jsonFileName = ic.extractImprovisedFeatures(indexWordsMap, indexSentenceMap)
+        ic.indexFeaturesWithSolr(jsonFileName, inputChoice)
     
