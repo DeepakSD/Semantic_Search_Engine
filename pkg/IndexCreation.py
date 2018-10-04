@@ -379,7 +379,7 @@ class IndexCreation():
 
 if __name__ == '__main__':
     ic = IndexCreation()
-    path = '/Users/deepaks/Documents/workspace/Semantic_Search_Engine/Data/'
+    path = 'C:/Users/vidya/PycharmProjects/Semantic_Search_Engine/Data'
     inputChoice = input("Enter the option to continue with\n 1. Task2 \n 2. Task3\n 3. Task4\n ") 
     data, indexWordsMap, indexSentenceMap, wordsDFrame, jsonFileName = ic.preprocessCorpus(path)
     if inputChoice == "1":
